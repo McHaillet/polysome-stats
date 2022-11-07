@@ -215,50 +215,6 @@ def rotation_matrix_z(angle):
     return mtx
 
 
-def rotation_matrix_zxz(zxz):
-    """Return the 3x3 rotation matrix of an Euler angle in ZXZ convention.
-    Note the order of the specified angle should be [Phi, Theta, Psi], or [Z1, X, Z2].
-    Rotation matrix multiplied in order mat(Z2) * mat(X) * mat(Z1).
-
-    @param angle: list of [Phi, Theta, Psi] in degree.
-
-    @return: rotation matrix.
-    """
-    assert len(zxz) == 3
-
-    z1, x, z2 = zxz
-
-    zm1 = rotation_matrix_z(z1)
-    xm = rotation_matrix_x(x)
-    zm2 = rotation_matrix_z(z2)
-
-    res = np.dot(zm2, np.dot(xm, zm1))
-
-    return res
-
-
-def rotation_matrix_zyz(zyz):
-    """Return the 3x3 rotation matrix of an Euler angle in ZYZ convention.
-    Note the order of the specified angle should be [Phi, Theta, Psi], or [Z1, X, Z2].
-    Rotation matrix multiplied in order mat(Z2) * mat(X) * mat(Z1)
-
-    @param angle: list of [Phi, Theta, Psi] in degree.
-
-    @return: rotation matrix.
-    """
-    assert len(zyz) == 3
-
-    z1, y, z2 = zyz
-
-    zm1 = rotation_matrix_z(z1)
-    xm = rotation_matrix_y(y)
-    zm2 = rotation_matrix_z(z2)
-
-    res = np.dot(zm2, np.dot(xm, zm1))
-
-    return res
-
-
 def mat2xyz(r):
     y = np.rad2deg(np.arcsin(r[0, 2]))
 
@@ -416,7 +372,6 @@ def mat2zyz(r):
 
 
 def rotation_matrix(angles, rotation_order='zxz', multiplication='post'):
-
     assert len(angles) == 3, "should provide 3 angles"
     assert multiplication in ['pre', 'post'], "multiplication can only be pre or post"
 
