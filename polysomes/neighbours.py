@@ -7,12 +7,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def neighbour_position_3d(dataframe, neighbourhood=5, plane_norm=[0, 0, 1], reference=[0, 0, 1],
                           estimate_membrane_plane=False, class_column_name='', center_classes=[], neighbour_classes=[]):
-    tomograms = np.unique(dataframe.tomogram)
-    classes = np.unique(dataframe[class_column_name])
 
-    if len(center_classes) == 0:
+    tomograms = np.unique(dataframe.tomogram)
+    classes = np.unique(dataframe[class_column_name]) if class_column_name != '' else []
+
+    if len(center_classes) == 0 and len(classes) != 0:
         center_classes = np.unique(classes)
-    if len(neighbour_classes) == 0:
+    if len(neighbour_classes) == 0 and len(classes) != 0:
         neighbour_classes = np.unique(classes)
 
     # plane adjustment
@@ -28,22 +29,25 @@ def neighbour_position_3d(dataframe, neighbourhood=5, plane_norm=[0, 0, 1], refe
         # select tomogram from dataframe
         df_tomogram = dataframe[dataframe.tomogram == tomo]
         coordinates = np.array([df_tomogram.x, df_tomogram.y, df_tomogram.z]).T
-        rotations = np.array([df_tomogram.rot, df_tomogram.tilt, df_tomogram.psi]).T
+        rotations = np.array([df_tomogram.rlnAngleRot, df_tomogram.rlnAngleTilt, df_tomogram.rlnAnglePsi]).T
 
         n_part_in_tomo = df_tomogram.shape[0]
         if n_part_in_tomo < 2:
             continue
         else:
-            n_center_particles += len([c for c in df_tomogram[class_column_name] if c in center_classes])
+            if len(classes) != 0:
+                n_center_particles += len([c for c in df_tomogram[class_column_name] if c in center_classes])
+            else:
+                n_center_particles += df_tomogram.shape[0]
 
         # calculate distance matrix
         dist_matrix = cdist(coordinates, coordinates)
         max_dist = np.max(dist_matrix)
         dist_matrix[dist_matrix == 0] = max_dist + 1
 
-        for i, particle in enumerate(df_tomogram):
+        for i, (row, particle) in enumerate(df_tomogram.iterrows()):
 
-            if not particle[class_column_name] in center_classes:
+            if len(classes) != 0 and not particle[class_column_name] in center_classes:
                 continue
 
             loop = neighbourhood if (n_part_in_tomo - 1) >= neighbourhood else n_part_in_tomo - 1
@@ -52,10 +56,10 @@ def neighbour_position_3d(dataframe, neighbourhood=5, plane_norm=[0, 0, 1], refe
 
                 j = np.argmin(dist_matrix[i])
                 distance = dist_matrix[i][j]
-                neighbour = df_tomogram[j]
+                neighbour = df_tomogram.iloc[j]  # use iloc for relative index in new df
                 dist_matrix[i][j] = max_dist + 1
 
-                if not neighbour[class_column_name] in neighbour_classes:
+                if len(classes) != 0 and not neighbour[class_column_name] in neighbour_classes:
                     continue
 
                 if 100 < distance < 1000:
@@ -74,7 +78,8 @@ def neighbour_position_3d(dataframe, neighbourhood=5, plane_norm=[0, 0, 1], refe
 
     relative_coords = np.array(relative_coords).T
     print('you have ', n_center_particles, ' particle centers')
-    print('you got ', relative_coords[1].shape, ' neighbours')
+    print('those have in total ', relative_coords[1].shape, ' neighbours considering ', neighbourhood,
+          ' neighbours per particle')
 
     if estimate_membrane_plane:
         svd = np.linalg.svd(relative_coords[:, 0:25000] -
@@ -106,7 +111,7 @@ def neighbour_pos_and_rot(dataframe, neighbourhood=5, plane_norm=[0, 0, 1], refe
         # select tomogram from dataframe
         df_tomogram = dataframe[dataframe.tomogram == tomo]
         coordinates = np.array([df_tomogram.x, df_tomogram.y, df_tomogram.z]).T
-        rotations = np.array([df_tomogram.rot, df_tomogram.tilt, df_tomogram.psi]).T
+        rotations = np.array([df_tomogram.rlnAngleRot, df_tomogram.rlnAngleTilt, df_tomogram.rlnAnglePsi]).T
 
         n_part_in_tomo = df_tomogram.shape[0]
         if n_part_in_tomo < 2:
@@ -119,7 +124,7 @@ def neighbour_pos_and_rot(dataframe, neighbourhood=5, plane_norm=[0, 0, 1], refe
         max_dist = np.max(dist_matrix)
         dist_matrix[dist_matrix == 0] = max_dist + 1
 
-        for i, particle in enumerate(df_tomogram):
+        for i, particle in df_tomogram.iterrows():
 
             loop = neighbourhood if (n_part_in_tomo - 1) >= neighbourhood else n_part_in_tomo - 1
 
@@ -198,7 +203,7 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
         # select tomogram from dataframe
         df_tomogram = dataframe[dataframe.tomogram == tomo]
         coordinates = np.array([df_tomogram.x, df_tomogram.y, df_tomogram.z]).T
-        rotations = np.array([df_tomogram.rot, df_tomogram.tilt, df_tomogram.psi]).T
+        rotations = np.array([df_tomogram.rlnAngleRot, df_tomogram.rlnAngleTilt, df_tomogram.rlnAnglePsi]).T
 
         n_part_in_tomo = df_tomogram.shape[0]
         if n_part_in_tomo < 2:
@@ -211,7 +216,7 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
         dist_matrix[dist_matrix == 0] = max_dist + 1
 
         # search for polysomes
-        for i, particle in enumerate(df_tomogram):
+        for i, particle in df_tomogram.iterrows():
 
             if not particle[class_column_name] in center_classes:
                 continue
@@ -221,8 +226,8 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
             for _ in range(loop):
 
                 j = np.argmin(dist_matrix[i])
-                distance = dist_matrix[i][j]
-                neighbour = df_tomogram[j]
+                # distance = dist_matrix[i][j]
+                neighbour = df_tomogram.iloc[j]  # use iloc for relative index in new df
                 dist_matrix[i][j] = max_dist + 1
 
                 # get coordinates of current and neighbour
@@ -282,11 +287,11 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
     relative_coords_non_poly = np.array(relative_coords_non_poly).T
 
     # return also class_to_poly_neighbour_class
-    return (dataframe, relative_coords_poly, relative_coords_non_poly)
+    return dataframe, relative_coords_poly, relative_coords_non_poly
 
 
 def density_plot(data, hist_limits, hist_voxel_size, fig_size, vrange=None, probability=True, plane='xy',
-                 tick_labels=None):
+                 tick_labels=None, colormap_plt='afmhot'):
     """
     @param data: (3, N) shape array, x, y, z coordinates with A units
     @param hist_limits: tuple of two elements giving min and max value for all axis
@@ -308,34 +313,38 @@ def density_plot(data, hist_limits, hist_voxel_size, fig_size, vrange=None, prob
 
     fig, ax = plt.subplots(figsize=fig_size)
 
+    # imshow takes array (M,N) as rows, columns, tranpose to get x as columns because input is (X,Y)
     if vrange is not None:
-        h = ax.imshow(np.rot90(hist_3d.sum(axis=plane_to_axis[plane])),
-                      cmap='afmhot', vmin=vrange[0], vmax=vrange[1])
+        h = ax.imshow(hist_3d.sum(axis=plane_to_axis[plane]).T,
+                      cmap=colormap_plt, vmin=vrange[0], vmax=vrange[1], origin='lower')
     else:
-        h = ax.imshow(np.rot90(hist_3d.sum(axis=plane_to_axis[plane])),
-                      cmap='afmhot')
+        h = ax.imshow(hist_3d.sum(axis=plane_to_axis[plane]).T,
+                      cmap=colormap_plt, origin='lower')
 
     # add colorbar and axis
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.1)
     cbar = plt.colorbar(h, cax=cax)
-    cbar.set_label('Probability')
+    if probability:
+        cbar.set_label('Probability')
+    else:
+        cbar.set_label('# particles')
     ax.set_xlabel(f'Relative {plane[0]}-coordinate $(\AA)$')
     ax.set_ylabel(f'Relative {plane[1]}-coordinate $(\AA)$')
 
     # ticks = [0, hist_3d.shape[0] // 2, hist_3d.shape[0] - 1]
     if tick_labels is None:
         tick_labels = [hist_limits[0], 0, hist_limits[1]]
-    print(tick_labels)
+    print('axis tick labels: ', tick_labels)
     tick_locs = np.round((((np.array(tick_labels) - hist_limits[0]) /
                            (hist_limits[-1] - hist_limits[0])) * n_bins)).astype(int)
 
-    print(tick_locs)
+    # print(tick_locs)
     ax.set_xticks(tick_locs)
     ax.set_xticklabels([str(l) for l in tick_labels])
 
     ax.set_yticks(tick_locs)
-    ax.set_yticklabels([str(l) for l in tick_labels[::-1]])
+    ax.set_yticklabels([str(l) for l in tick_labels])
 
     return fig, ax, hist_3d, hist_3d_edges
 
