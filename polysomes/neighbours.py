@@ -164,23 +164,18 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
                           center_classes=[], neighbour_classes=[]):
     # set default classes if not provided
     tomograms = np.unique(dataframe.tomogram)
-    classes = np.unique(dataframe[class_column_name])
+    classes = np.unique(dataframe[class_column_name]) if class_column_name != '' else []
 
-    if len(center_classes) == 0:
+    if len(center_classes) == 0 and len(classes) != 0:
         center_classes = np.unique(classes)
-    if len(neighbour_classes) == 0:
+    if len(neighbour_classes) == 0 and len(classes) != 0:
         neighbour_classes = np.unique(classes)
 
     # add column for leading and trailing ids, filled with -1 by default
-    if not ('trailing_id' in dataframe.dtype.names and 'leading_id' in dataframe.dtype.names):
-        dataframe = rfn.append_fields(dataframe, 'trailing_id',
-                                      np.empty(dataframe.shape[0]), dtypes=int, usemask=False, asrecarray=True)
-        dataframe = rfn.append_fields(dataframe, 'leading_id',
-                                      np.empty(dataframe.shape[0]), dtypes=int, usemask=False, asrecarray=True)
-        # TODO maybe not use -1 as that is the same as the last id
-        dataframe['trailing_id'] = -1
-        dataframe['leading_id'] = -1
-    # else the fields are already there, do not overwrite them
+    if not ('trailing_id' in dataframe.columns and 'leading_id' in dataframe.columns):
+        dataframe['trailing_id'] = [-1, ] * dataframe.shape[0]
+        dataframe['leading_id'] = [-1, ] * dataframe.shape[0]
+        # else the fields are already there, do not overwrite them
 
     # unpack the bin limits
     x_bins, y_bins, z_bins = pixels_mask
@@ -209,16 +204,19 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
         if n_part_in_tomo < 2:
             continue
         else:
-            n_center_particles += len([c for c in df_tomogram[class_column_name] if c in center_classes])
+            if len(classes) != 0:
+                n_center_particles += len([c for c in df_tomogram[class_column_name] if c in center_classes])
+            else:
+                n_center_particles += df_tomogram.shape[0]
 
         dist_matrix = cdist(coordinates, coordinates)
         max_dist = np.max(dist_matrix)
         dist_matrix[dist_matrix == 0] = max_dist + 1
 
         # search for polysomes
-        for i, particle in df_tomogram.iterrows():
+        for i, (row, particle) in enumerate(df_tomogram.iterrows()):
 
-            if not particle[class_column_name] in center_classes:
+            if len(classes) != 0 and not particle[class_column_name] in center_classes:
                 continue
 
             loop = neighbourhood if (n_part_in_tomo - 1) >= neighbourhood else n_part_in_tomo - 1
@@ -229,6 +227,9 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
                 # distance = dist_matrix[i][j]
                 neighbour = df_tomogram.iloc[j]  # use iloc for relative index in new df
                 dist_matrix[i][j] = max_dist + 1
+
+                if len(classes) != 0 and not neighbour[class_column_name] in neighbour_classes:
+                    continue
 
                 # get coordinates of current and neighbour
                 coord_p = coordinates[i]
@@ -269,24 +270,34 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
                 # - no neighbour has been assigned to the trailing/leading position
                 # - and the neighbor falls in the masked region, and center in inverse region for neighbor
                 if ((trailing_mask[x_loc, y_loc, z_loc] and leading_mask[x_loc_n, y_loc_n, z_loc_n]) and
-                        (dataframe[particle.id].trailing_id == -1 and dataframe[neighbour.id].leading_id == -1)):
-                    dataframe[particle.id].trailing_id = neighbour.id
+                        (dataframe.loc[row, 'trailing_id'] == -1 and
+                         dataframe.loc[neighbour.name, 'leading_id'] == -1)):
+
+                    # record association
+                    dataframe.loc[row, 'trailing_id'] = neighbour.name
+                    dataframe.loc[neighbour.name, 'leading_id'] = row
+
+                    # add coordinates
                     relative_coords_poly.append(rel_coords)
-                    dataframe[neighbour.id].leading_id = particle.id
                     relative_coords_poly.append(rel_coords_n)
+
                 elif ((leading_mask[x_loc, y_loc, z_loc] and trailing_mask[x_loc_n, y_loc_n, z_loc_n]) and
-                      (dataframe[particle.id].leading_id == -1 and dataframe[neighbour.id].trailing_id == -1)):
-                    dataframe[particle.id].leading_id = neighbour.id
+                      (dataframe.loc[row, 'leading_id'] == -1 and dataframe.loc[neighbour.name, 'trailing_id'] == -1)):
+
+                    # record association
+                    dataframe.loc[row, 'leading_id'] = neighbour.name
+                    dataframe.loc[neighbour.name, 'trailing_id'] = row
+
+                    # add coordinates
                     relative_coords_poly.append(rel_coords)
-                    dataframe[neighbour.id].trailing_id = particle.id
                     relative_coords_poly.append(rel_coords_n)
-                else:
+
+                else:  # add coordinates to the non-polysome list for later inspection
                     relative_coords_non_poly.append(rel_coords)
 
     relative_coords_poly = np.array(relative_coords_poly).T
     relative_coords_non_poly = np.array(relative_coords_non_poly).T
 
-    # return also class_to_poly_neighbour_class
     return dataframe, relative_coords_poly, relative_coords_non_poly
 
 
