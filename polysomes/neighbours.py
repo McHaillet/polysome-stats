@@ -161,7 +161,7 @@ def neighbour_pos_and_rot(dataframe, neighbourhood=5, plane_norm=[0, 0, 1], refe
 
 def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, neighbourhood=5,
                           plane_norm=[0, 0, 1], reference=[0, 0, 1], class_column_name='',
-                          center_classes=[], neighbour_classes=[]):
+                          center_classes=[], neighbour_classes=[], overwrite=False):
     # set default classes if not provided
     tomograms = np.unique(dataframe.tomogram)
     classes = np.unique(dataframe[class_column_name]) if class_column_name != '' else []
@@ -172,7 +172,7 @@ def find_leading_trailing(dataframe, trailing_mask, leading_mask, pixels_mask, n
         neighbour_classes = np.unique(classes)
 
     # add column for leading and trailing ids, filled with -1 by default
-    if not ('trailing_id' in dataframe.columns and 'leading_id' in dataframe.columns):
+    if not ('trailing_id' in dataframe.columns and 'leading_id' in dataframe.columns) or overwrite:
         dataframe['trailing_id'] = [-1, ] * dataframe.shape[0]
         dataframe['leading_id'] = [-1, ] * dataframe.shape[0]
         # else the fields are already there, do not overwrite them
